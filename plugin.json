@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "name": "DAB Music",
-  "author": "Kingkor Roy Tirtho",
+  "version": "0.0.1",
+  "name": "SquidWTF",
+  "author": "Clover P.",
   "description": "dab.yeet.su audio source plugin for Spotube",
   "entryPoint": "DABMusicAudioSourcePlugin",
   "apis": ["localstorage", "webview"],
