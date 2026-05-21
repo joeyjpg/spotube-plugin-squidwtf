@@ -5,7 +5,7 @@ I have no idea what I'm doing.
 TODO:
 * Make fork (DONE!)
 * Make README (DONE!)
-* Figure out git
+* Figure out git (DONE!)
 * Figure out how any of this even works
 * Make it not use DAB
 * Make it use squidWTF
