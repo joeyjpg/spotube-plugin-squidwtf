@@ -1,0 +1,5 @@
+git add . tells git what the root directory is
+
+git commit -m "Something" tells git to commit changes
+
+gh repo push sends it all to github
