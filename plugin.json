@@ -5,7 +5,7 @@
   "description": "dab.yeet.su audio source plugin for Spotube",
   "entryPoint": "DABMusicAudioSourcePlugin",
   "apis": ["localstorage", "webview"],
-  "abilities": ["audio-source", "authentication"],
-  "repository": "https://github.com/KRTirtho/spotube-plugin-dab-music",
+  "abilities": ["audio-source"],
+  "repository": "https://github.com/joeyjpg/spotube-plugin-Squidwtf",
   "pluginApiVersion": "2.0.0"
 }

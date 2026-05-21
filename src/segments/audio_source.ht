@@ -5,15 +5,21 @@ var HttpResponse = std.HttpResponse
 var RequestOptions = std.RequestOptions
 
 class Converter {
-  static fun toSpotubeMatchObject(res: List) -> List<Map> {
-    return res.map((d){
+  // The squid.wtf Qobuz API returns the standard Qobuz response shape:
+  //   tracks.items[] with nested .album.artist.name and .album.image.large
+  // The old dab.yeet.su proxy returned a flattened shape, so all field
+  // paths below have been updated accordingly.
+  static fun toSpotubeMatchObject(items: List) -> List<Map> {
+    return items.map((d){
       return {
         "id": d["id"].toString(),
         "title": d["title"],
-        "artists": [d["artist"]],
+        // Artist lives one level deeper under album.artist
+        "artists": [d["album"]["artist"]],
         "duration": d["duration"] * 1000,
-        "thumbnail": d["albumCover"],
-        "externalUri": "https://dab.yeet.su/search?q=${d["title"]}%20${d["artist"]}",
+        // Cover art is at album.image.large (or .small / .thumbnail)
+        "thumbnail": d["album"]["image"]["large"],
+        "externalUri": "https://qobuz.squid.wtf/search?q=${d["title"]}%20${d["album"]["artist"]["name"]}",
       }.toJson()
     }).toList()
   }
@@ -30,8 +36,8 @@ class Converter {
       {
         "url": streams[1]["url"],
         "container": "mp3",
-        "type": "lossless",
-        "codec": "aac",
+        "type": "lossy",
+        "codec": "mp3",
         "bitrate": 320000,
       }.toJson()
     ]
@@ -46,8 +52,8 @@ class AudioSourceEndpoint {
   // List of containers and their supported qualities
   get supportedPresets -> List {
     return [
-      { 
-        type: "lossless", 
+      {
+        type: "lossless",
         name: "flac",
         qualities: [
           { bitDepth: 24, sampleRate: 96000 },
@@ -58,36 +64,37 @@ class AudioSourceEndpoint {
       { type: "lossy", name: "mp3", qualities: [ { bitrate: 320000 } ] }.toJson(),
     ]
   }
-  
+
   /// Find matching audio sources for a given track. It can return one or multiple matches.
   /// The first match is considered the best match.
   /// @param track - Map<SpotubeTrackObject>
   /// @returns Future<List<SpotubeAudioSourceMatchObject>>
   fun matches(track: Map) -> List {
     final hasISRC = track["isrc"] != null && track["isrc"].isNotEmpty
-    var query = hasISRC ? track["isrc"] 
+    var query = hasISRC ? track["isrc"]
       : "${track["name"]} ${track["artists"][0]["name"]}"
 
+    // squid.wtf mirrors the real Qobuz search endpoint; results are nested
+    // under res.data["tracks"]["items"] rather than res.data["tracks"]
     return api.get_req(
-      "/search",
+      "/search/tracks",
       queryParameters: {
-        "q": query,
-        "type": "track",
+        "query": query,
         "limit": "5"
       }.toJson()
     ).then((res) {
-      if(hasISRC && (res.data["tracks"] == null || res.data["tracks"].isEmpty)) {
+      var items = res.data["tracks"]["items"]
+      if(hasISRC && (items == null || items.isEmpty)) {
         return api.get_req(
-          "/search",
+          "/search/tracks",
           queryParameters: {
-            "q": "${track["name"]} ${track["artists"][0]["name"]}",
-            "type": "track",
+            "query": "${track["name"]} ${track["artists"][0]["name"]}",
             "limit": "5"
           }.toJson()
-        ).then((res)=> Converter.toSpotubeMatchObject(res.data["tracks"]))
+        ).then((res) => Converter.toSpotubeMatchObject(res.data["tracks"]["items"]))
       }
-      
-      return Converter.toSpotubeMatchObject(res.data["tracks"])
+
+      return Converter.toSpotubeMatchObject(items)
     })
   }
 
@@ -96,18 +103,23 @@ class AudioSourceEndpoint {
   /// @param match - Map<SpotubeAudioSourceStreamObject>
   /// @returns Future<List<SpotubeAudioSourceStreamObject>>
   fun streams(match: Map) -> List {
+    // Quality codes for squid.wtf / Qobuz:
+    //   27 = FLAC 24-bit / Hi-Res (up to 192 kHz)
+    //    7 = FLAC 24-bit / 96 kHz
+    //    6 = FLAC 16-bit / 44.1 kHz
+    //    5 = MP3 320 kbps
     return api.get_req(
-      "/stream",
+      "/track/getFileUrl",
       queryParameters: {
-        "trackId": match["id"],
-        "quality": 27
+        "track_id": match["id"],
+        "format_id": 27        // hi-res FLAC
       }.toJson()
     ).then((hiRes){
       return api.get_req(
-        "/stream",
+        "/track/getFileUrl",
         queryParameters: {
-          "trackId": match["id"],
-          "quality": 5
+          "track_id": match["id"],
+          "format_id": 5       // MP3 320
         }.toJson()
       ).then((lowRes){
         return Converter.toSpotubeStreamObject([
